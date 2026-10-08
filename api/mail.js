@@ -1,4 +1,4 @@
-﻿import nodemailer from 'nodemailer';
+import nodemailer from 'nodemailer';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -24,8 +24,12 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Recipient and subject are required' });
   }
 
-  const user = process.env.GMAIL_USER || 'kingpocketfmtamil@gmail.com';
-  const pass = process.env.GMAIL_APP_PASSWORD || 'qniyfksborjiafmf';
+  const user = process.env.GMAIL_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD;
+
+  if (!user || !pass) {
+    return res.status(500).json({ error: 'Mail relay credentials not configured in environment variables' });
+  }
 
   const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',

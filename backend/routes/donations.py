@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
 from flask_jwt_extended import get_jwt_identity, jwt_required, verify_jwt_in_request
+from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload
 from werkzeug.utils import secure_filename
 from PIL import Image
@@ -275,7 +276,7 @@ def nearby_available_donations():
         Donation.query.options(joinedload(Donation.donor))
         .filter(
             Donation.status.in_(['Available', 'AVAILABLE', 'PARTIALLY_ALLOCATED', 'partially_allocated']),
-            Donation.remaining_quantity > 0,
+            func.coalesce(Donation.remaining_quantity, Donation.quantity_number) > 0,
             Donation.expiry_time > now,
             Donation.latitude.isnot(None),
             Donation.longitude.isnot(None),

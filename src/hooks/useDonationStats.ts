@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
-import api from '../lib/api'
+import api, { BASE_URL } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useRealtimeSync } from './useRealtimeSync'
+
+function normalizeDonationImageUrl(image?: string | null) {
+  if (!image) return 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=400&h=300&fit=crop'
+  if (image.startsWith('http://') || image.startsWith('https://')) return image
+  const path = image.startsWith('/') ? image : `/${image}`
+  if (path.startsWith('/api/')) return `${BASE_URL}${path}`
+  if (path.startsWith('/uploads/')) return `${BASE_URL}/api/donations${path}`
+  return `${BASE_URL}${path}`
+}
 
 export function useDonationStats() {
   const { user } = useAuth()
@@ -93,7 +102,7 @@ export function useDonorDonations() {
         receiver: d.receiver_name || 'Unassigned',
         pickupTime: d.pickup_time ? parseUtc(d.pickup_time)!.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—',
         expiryTime: d.expiry_time ? parseUtc(d.expiry_time)!.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—',
-        image: d.food_image || d.image || 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=400&h=300&fit=crop',
+        image: normalizeDonationImageUrl(d.food_image || d.image),
         pickupAddress: d.pickup_address,
         status: d.status || 'Available',
       }))

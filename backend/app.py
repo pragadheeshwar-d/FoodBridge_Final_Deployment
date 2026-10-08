@@ -650,7 +650,6 @@ def create_app(config_class=Config):
         ensure_call_schema(app)
         ensure_conversation_schema(app)
         seed_admin_user(app)
-        auto_verify_all_users(app)
 
     import socket_events  # noqa: F401
 

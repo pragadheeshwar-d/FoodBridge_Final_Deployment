@@ -72,6 +72,7 @@ class DonationMapServiceTests(unittest.TestCase):
                     veg_type='veg' if index % 2 == 0 else 'nonveg',
                     quantity='20 meals',
                     quantity_number=20,
+                    remaining_quantity=20,
                     unit='meals',
                     pickup_address=f'{index + 1} Test Street',
                     latitude=base_lat + index * 0.002,

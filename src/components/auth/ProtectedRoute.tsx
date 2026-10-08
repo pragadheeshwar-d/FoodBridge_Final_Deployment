@@ -45,6 +45,9 @@ export function ProtectedRoute({ children, roles, requireApproved = true }: Prot
   }
 
   if (requireApproved) {
+    if (!user.verified && (user.role === 'donor' || user.role === 'receiver')) {
+      return <Navigate to="/auth/registration-success" replace />
+    }
     if (user.status !== 'approved') {
       return <Navigate to="/pending" replace />
     }

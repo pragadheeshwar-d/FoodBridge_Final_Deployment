@@ -41,3 +41,4 @@ backend/instance/
 *.sqlite
 .vercel
 .env*
+.playwright-mcp/

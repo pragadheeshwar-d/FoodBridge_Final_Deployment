@@ -96,7 +96,17 @@ def _resolve_image_url(path: str | None) -> str | None:
     if path.startswith('http://') or path.startswith('https://') or path.startswith('data:'):
         return path
     filename = os.path.basename(path)
-    return f"http://127.0.0.1:5000/uploads/profile/{filename}"
+    backend_url = ''
+    try:
+        if request and request.host_url:
+            backend_url = request.host_url.rstrip('/')
+    except Exception:
+        pass
+    if not backend_url:
+        backend_url = os.environ.get('RENDER_EXTERNAL_URL') or current_app.config.get('BACKEND_URL') or ''
+    if backend_url:
+        return f"{backend_url.rstrip('/')}/uploads/profile/{filename}"
+    return f"/uploads/profile/{filename}"
 
 
 def _save_base64_image(data_url: str) -> str:
@@ -167,43 +177,13 @@ def _verification_url(token: str) -> str:
 
 
 def _send_email_message(to_email: str, subject: str, text_body: str, html_body: str, app) -> bool:
-    # 1. Try Vercel Serverless Email Relay (uses Gmail SMTP port 465, unblocked on Vercel -> sends to ANY recipient!)
-    frontend_url = current_app.config.get('FRONTEND_URL') or 'https://food-bridge-sage.vercel.app'
-    relay_url = f"{frontend_url.rstrip('/')}/api/mail"
-    try:
-        payload = {
-            'to': to_email,
-            'subject': subject,
-            'text': text_body,
-            'html': html_body,
-            'secret': os.environ.get('MAIL_SECRET', 'foodbridge-mail-secret-2026'),
-        }
-        req = urllib.request.Request(
-            relay_url,
-            data=json.dumps(payload).encode('utf-8'),
-            headers={
-                'Content-Type': 'application/json',
-                'User-Agent': 'FoodBridge/1.0',
-            },
-            method='POST',
-        )
-        with urllib.request.urlopen(req, timeout=12) as resp:
-            if 200 <= resp.status < 300:
-                app.logger.info('Email sent successfully via Vercel Gmail Relay to %s', to_email)
-                return True
-    except urllib.error.HTTPError as e:
-        err_text = e.read().decode('utf-8', errors='ignore')
-        app.logger.warning('Vercel mail relay failed (HTTP %s): %s', e.code, err_text)
-    except Exception as e:
-        app.logger.warning('Vercel mail relay failed: %s', e)
-
-    # 2. Try Resend API (HTTPS port 443)
-    resend_api_key = os.environ.get('RESEND_API_KEY')
-    if resend_api_key and resend_api_key.strip():
+    # 1. Primary: Resend API (HTTPS port 443)
+    resend_api_key = (os.environ.get('RESEND_API_KEY') or '').strip()
+    if resend_api_key:
         try:
             url = 'https://api.resend.com/emails'
             headers = {
-                'Authorization': f'Bearer {resend_api_key.strip()}',
+                'Authorization': f'Bearer {resend_api_key}',
                 'Content-Type': 'application/json',
                 'User-Agent': 'FoodBridge/1.0',
             }
@@ -233,45 +213,41 @@ def _send_email_message(to_email: str, subject: str, text_body: str, html_body: 
         except Exception as e:
             app.logger.warning('Resend API send failed: %s', e)
 
-    # 2. Try Brevo API (HTTPS port 443)
-    brevo_api_key = os.environ.get('BREVO_API_KEY')
-    if brevo_api_key and brevo_api_key.strip():
+    # 2. Secondary fallback: Vercel Serverless Email Relay
+    frontend_url = current_app.config.get('FRONTEND_URL') or os.environ.get('FRONTEND_URL')
+    if frontend_url and 'vercel.app' in frontend_url:
+        relay_url = f"{frontend_url.rstrip('/')}/api/mail"
         try:
-            url = 'https://api.brevo.com/v3/smtp/email'
-            headers = {
-                'api-key': brevo_api_key.strip(),
-                'Content-Type': 'application/json',
-                'accept': 'application/json',
-                'User-Agent': 'FoodBridge/1.0',
-            }
-            sender_email = os.environ.get('MAIL_USERNAME') or os.environ.get('MAIL_DEFAULT_SENDER') or 'kingpocketfmtamil@gmail.com'
             payload = {
-                'sender': {'name': 'FoodBridge', 'email': sender_email},
-                'to': [{'email': to_email}],
+                'to': to_email,
                 'subject': subject,
-                'htmlContent': html_body,
-                'textContent': text_body,
+                'text': text_body,
+                'html': html_body,
+                'secret': os.environ.get('MAIL_SECRET', 'foodbridge-mail-secret-2026'),
             }
             req = urllib.request.Request(
-                url,
+                relay_url,
                 data=json.dumps(payload).encode('utf-8'),
-                headers=headers,
+                headers={
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'FoodBridge/1.0',
+                },
                 method='POST',
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=12) as resp:
                 if 200 <= resp.status < 300:
-                    app.logger.info('Email sent successfully via Brevo API to %s', to_email)
+                    app.logger.info('Email sent successfully via Vercel Gmail Relay to %s', to_email)
                     return True
         except urllib.error.HTTPError as e:
             err_text = e.read().decode('utf-8', errors='ignore')
-            app.logger.warning('Brevo API send failed (HTTP %s): %s', e.code, err_text)
+            app.logger.warning('Vercel mail relay failed (HTTP %s): %s', e.code, err_text)
         except Exception as e:
-            app.logger.warning('Brevo API send failed: %s', e)
+            app.logger.warning('Vercel mail relay failed: %s', e)
 
-    # 3. Fallback to SMTP
+    # 3. Tertiary fallback: SMTP
     try:
         mail = app.extensions.get('mail')
-        if mail:
+        if mail and (os.environ.get('MAIL_USERNAME') or os.environ.get('MAIL_SERVER')):
             msg = Message(
                 subject=subject,
                 recipients=[to_email],
@@ -287,11 +263,11 @@ def _send_email_message(to_email: str, subject: str, text_body: str, html_body: 
     return False
 
 
-def _send_verification_email(user: User) -> None:
+def _send_verification_email(user: User, sync: bool = False) -> bool:
     if not user.verification_token:
-        return
+        return False
     app = current_app._get_current_object()
-    def _run():
+    def _do_send():
         with app.app_context():
             subject = 'Verify your FoodBridge account'
             text_body = (
@@ -305,9 +281,13 @@ def _send_verification_email(user: User) -> None:
                 f'<p><a href="{_verification_url(user.verification_token)}" '
                 f'style="display:inline-block;padding:12px 18px;background:#2E7D32;color:#fff;text-decoration:none;border-radius:8px;">Verify Account</a></p>'
             )
-            _send_email_message(user.email, subject, text_body, html_body, app)
+            return _send_email_message(user.email, subject, text_body, html_body, app)
 
-    threading.Thread(target=_run, daemon=True).start()
+    if sync:
+        return _do_send()
+    else:
+        threading.Thread(target=_do_send, daemon=True).start()
+        return True
 
 
 def _reset_url(token: str) -> str:
@@ -383,20 +363,21 @@ def register():
         organization=organization,
         phone=phone or None,
         address=address or None,
-        verified=True if not is_mail_configured else False,
-        verification_token=str(uuid4()),
-        verification_expiry=datetime.utcnow() + timedelta(days=1),
+        verified=False if is_mail_configured else True,
+        verification_token=str(uuid4()) if is_mail_configured else None,
+        verification_expiry=datetime.utcnow() + timedelta(days=1) if is_mail_configured else None,
         status='approved',
         account_status='approved',
-        verification_status='VERIFIED' if not is_mail_configured else 'PENDING',
+        verification_status='PENDING' if is_mail_configured else 'VERIFIED',
     )
     db.session.add(user)
     db.session.commit()
     if is_mail_configured:
         _send_verification_email(user)
 
-    token = create_access_token(identity=str(user.id))
-    return _build_response(user, token=token, message='Registration successful'), 201
+    token = None if is_mail_configured else create_access_token(identity=str(user.id))
+    msg = 'Registration successful. Please verify your email to activate your account.' if is_mail_configured else 'Registration successful'
+    return _build_response(user, token=token, message=msg), 201
 
 
 @auth_bp.route('/login', methods=['POST'])
@@ -624,7 +605,12 @@ def resend_verification():
     user.verification_token = str(uuid4())
     user.verification_expiry = datetime.utcnow() + timedelta(days=1)
     db.session.commit()
-    _send_verification_email(user)
+    sent = _send_verification_email(user, sync=True)
+    if not sent:
+        return {
+            'success': False,
+            'message': 'Failed to deliver verification email. Please check your email configuration or contact support.',
+        }, 502
     return {'success': True, 'message': 'Verification email sent successfully', 'data': {}}, 200
 
 
