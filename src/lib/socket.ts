@@ -10,7 +10,10 @@ let socket: Socket | null = null
 export function getSocket(): Socket {
   if (!socket) {
     const token = localStorage.getItem('token') ?? undefined
-    const socketBaseUrl = (import.meta.env.VITE_SOCKET_URL as string) || BASE_URL || window.location.origin
+    let socketBaseUrl = (import.meta.env.VITE_SOCKET_URL as string) || BASE_URL || window.location.origin
+    if (import.meta.env.PROD && (socketBaseUrl.includes('127.0.0.1') || socketBaseUrl.includes('localhost'))) {
+      socketBaseUrl = BASE_URL
+    }
     const transports = ['websocket', 'polling']
     socket = io(socketBaseUrl, {
       auth: { token },

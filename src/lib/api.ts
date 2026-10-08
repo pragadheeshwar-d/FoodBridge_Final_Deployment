@@ -5,11 +5,21 @@
  */
 import axios from 'axios'
 
-const DEFAULT_API_URL = import.meta.env?.DEV
-  ? ''
-  : 'https://foodbridge-api-q1t4.onrender.com'
+const PRODUCTION_API_URL = 'https://foodbridge-api-q1t4.onrender.com'
 
-export const BASE_URL = ((import.meta.env?.VITE_API_URL as string) || DEFAULT_API_URL).replace(/\/+$/, '')
+const resolveBaseUrl = (): string => {
+  const envUrl = (import.meta.env?.VITE_API_URL as string) || ''
+  if (import.meta.env?.DEV) {
+    return envUrl
+  }
+  // In production, ignore localhost/127.0.0.1 if accidentally baked in
+  if (!envUrl || envUrl.includes('127.0.0.1') || envUrl.includes('localhost')) {
+    return PRODUCTION_API_URL
+  }
+  return envUrl
+}
+
+export const BASE_URL = resolveBaseUrl().replace(/\/+$/, '')
 
 const api = axios.create({
   baseURL: BASE_URL ? `${BASE_URL}/api` : '/api',
