@@ -9,6 +9,17 @@ export const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun.services.mozilla.com' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
     ...(import.meta.env.VITE_TURN_SERVER_URL
       ? [
           {
@@ -19,6 +30,7 @@ export const RTC_CONFIG: RTCConfiguration = {
         ]
       : []),
   ],
+  iceCandidatePoolSize: 10,
 }
 
 export class WebRTCService {
@@ -119,6 +131,15 @@ export class WebRTCService {
     pc.onconnectionstatechange = () => {
       if (callbacks.onConnectionStateChange) {
         callbacks.onConnectionStateChange(pc.connectionState)
+      }
+    }
+
+    pc.oniceconnectionstatechange = () => {
+      const state = pc.iceConnectionState
+      if (state === 'connected' || state === 'completed') {
+        if (callbacks.onConnectionStateChange) {
+          callbacks.onConnectionStateChange('connected')
+        }
       }
     }
 
