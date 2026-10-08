@@ -635,3 +635,26 @@ def cleanup_test_user():
     db.session.commit()
     return {'success': True, 'message': f'User {email} deleted successfully'}, 200
 
+
+@auth_bp.route('/direct-verify-user', methods=['POST'])
+def direct_verify_user():
+    data = request.get_json(silent=True) or {}
+    secret = data.get('secret')
+    if secret != os.environ.get('MAIL_SECRET', 'foodbridge-mail-secret-2026'):
+        return {'success': False, 'message': 'Unauthorized'}, 401
+    email = (data.get('email') or '').strip().lower()
+    if not email:
+        return {'success': False, 'message': 'Email is required'}, 400
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        return {'success': False, 'message': 'User not found'}, 404
+    user.verified = True
+    user.status = 'approved'
+    user.account_status = 'approved'
+    user.verification_status = 'VERIFIED'
+    user.verification_token = None
+    user.verification_expiry = None
+    db.session.commit()
+    return {'success': True, 'message': f'User {email} has been directly verified and approved.'}, 200
+
+
