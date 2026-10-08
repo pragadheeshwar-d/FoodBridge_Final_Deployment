@@ -46,6 +46,7 @@ interface CallContextType {
   isMuted: boolean
   isSpeakerOn: boolean
   permissionError: string | null
+  callErrorMessage: string | null
   startCall: (
     partner: {
       id: string | number
@@ -76,6 +77,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [isMuted, setIsMuted] = useState<boolean>(false)
   const [isSpeakerOn, setIsSpeakerOn] = useState<boolean>(true)
   const [permissionError, setPermissionError] = useState<string | null>(null)
+  const [callErrorMessage, setCallErrorMessage] = useState<string | null>(null)
 
   const activeCallRef = useRef<ActiveCallData | null>(null)
   activeCallRef.current = activeCall
@@ -129,6 +131,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     stopAllAudioAndTimers()
     webrtcService.cleanup()
     setIsMuted(false)
+    setCallErrorMessage(null)
   }, [stopAllAudioAndTimers])
 
   // Reset to idle with optional delayed auto-close
@@ -181,6 +184,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       }
 
       setPermissionError(null)
+      setCallErrorMessage(null)
 
       // 1. Request microphone access upfront
       try {
@@ -264,9 +268,17 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         if (state === 'connected') {
           setCallState('connected')
           startTimer()
-        } else if (state === 'failed' || state === 'disconnected') {
+        } else if (state === 'failed') {
           setCallState('failed')
-          scheduleResetToIdle(2500)
+          scheduleResetToIdle(3000)
+        } else if (state === 'disconnected') {
+          setTimeout(() => {
+            const current = webrtcService.getConnectionState()
+            if (current === 'disconnected' || current === 'failed') {
+              setCallState('failed')
+              scheduleResetToIdle(3000)
+            }
+          }, 4000)
         }
       },
     })
@@ -398,9 +410,17 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
             if (state === 'connected') {
               setCallState('connected')
               startTimer()
-            } else if (state === 'failed' || state === 'disconnected') {
+            } else if (state === 'failed') {
               setCallState('failed')
-              scheduleResetToIdle(2500)
+              scheduleResetToIdle(3000)
+            } else if (state === 'disconnected') {
+              setTimeout(() => {
+                const current = webrtcService.getConnectionState()
+                if (current === 'disconnected' || current === 'failed') {
+                  setCallState('failed')
+                  scheduleResetToIdle(3000)
+                }
+              }, 4000)
             }
           },
         })
@@ -500,8 +520,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const handleCallError = (payload: any) => {
       console.warn('[Call] Call error from server:', payload?.message)
       stopAllAudioAndTimers()
+      setCallErrorMessage(payload?.message || 'Unable to establish peer connection.')
       setCallState('failed')
-      scheduleResetToIdle(2500)
+      scheduleResetToIdle(4000)
     }
 
     socket.on('call:incoming', handleIncomingCall)
@@ -553,6 +574,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         isMuted,
         isSpeakerOn,
         permissionError,
+        callErrorMessage,
         startCall,
         acceptCall,
         declineCall,

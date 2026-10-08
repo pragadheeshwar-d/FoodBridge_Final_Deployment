@@ -30,6 +30,7 @@ export function AudioCallModal() {
     isMuted,
     isSpeakerOn,
     permissionError,
+    callErrorMessage,
     acceptCall,
     declineCall,
     endCall,
@@ -316,7 +317,7 @@ export function AudioCallModal() {
                     (formattedDuration !== '00:00'
                       ? `Duration: ${formattedDuration}`
                       : 'Call session ended.')}
-                  {callState === 'failed' && 'Unable to establish peer connection.'}
+                  {callState === 'failed' && (callErrorMessage || 'Unable to establish peer connection.')}
                 </p>
 
                 <button

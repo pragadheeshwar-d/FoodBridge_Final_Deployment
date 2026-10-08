@@ -262,6 +262,28 @@ def handle_call_initiate(data):
 
     is_receiver_online = str(receiver.id) in user_sids or str(receiver.id) in connected_users
 
+    if not is_receiver_online:
+        call.status = 'missed'
+        call.ended_at = datetime.utcnow()
+        db.session.commit()
+        active_calls.pop(client_call_id, None)
+
+        try:
+            notif = Notification(
+                user_id=receiver.id,
+                title="📞 Missed Audio Call",
+                message=f"Missed audio call from {caller_name}",
+                type='warning',
+                link=f"/{receiver.role}/messages?conversationId={conv.id}",
+            )
+            db.session.add(notif)
+            emit_notification(notif)
+        except Exception:
+            pass
+
+        emit('call:error', {'message': f'{receiver_name} is currently offline.'})
+        return
+
     call_payload = {
         'call_id': client_call_id,
         'conversation_id': conv.id,
@@ -273,7 +295,7 @@ def handle_call_initiate(data):
         'receiver_name': receiver_name,
         'receiver_avatar': receiver.profile_image,
         'receiver_role': receiver.role,
-        'online': is_receiver_online,
+        'online': True,
     }
 
     # Relay call:incoming to receiver's room
@@ -344,9 +366,18 @@ def handle_call_offer(data):
     """Relay WebRTC SDP offer from caller to receiver."""
     call_id = data.get('call_id')
     sdp = data.get('sdp')
-    call = CallSession.query.filter_by(call_id=call_id).first()
-    if call and sdp:
-        emit('call:offer', {'call_id': call_id, 'sdp': sdp}, room=f'user_{call.receiver_id}')
+    if not call_id or not sdp:
+        return
+
+    call_data = active_calls.get(call_id)
+    receiver_id = call_data.get('receiver_id') if call_data else None
+    if not receiver_id:
+        call = CallSession.query.filter_by(call_id=call_id).first()
+        if call:
+            receiver_id = call.receiver_id
+
+    if receiver_id:
+        emit('call:offer', {'call_id': call_id, 'sdp': sdp}, room=f'user_{receiver_id}')
 
 
 @socketio.on('call:answer')
@@ -354,23 +385,49 @@ def handle_call_answer(data):
     """Relay WebRTC SDP answer from receiver back to caller."""
     call_id = data.get('call_id')
     sdp = data.get('sdp')
-    call = CallSession.query.filter_by(call_id=call_id).first()
-    if call and sdp:
-        emit('call:answer', {'call_id': call_id, 'sdp': sdp}, room=f'user_{call.caller_id}')
+    if not call_id or not sdp:
+        return
+
+    call_data = active_calls.get(call_id)
+    caller_id = call_data.get('caller_id') if call_data else None
+    if not caller_id:
+        call = CallSession.query.filter_by(call_id=call_id).first()
+        if call:
+            caller_id = call.caller_id
+
+    if caller_id:
+        emit('call:answer', {'call_id': call_id, 'sdp': sdp}, room=f'user_{caller_id}')
 
 
 @socketio.on('call:ice_candidate')
 def handle_call_ice_candidate(data):
-    """Relay WebRTC ICE candidate between peers."""
+    """Relay WebRTC ICE candidate between peers without blocking on DB."""
     call_id = data.get('call_id')
     candidate = data.get('candidate')
+    if not call_id or not candidate:
+        return
+
     sid = str(getattr(request, 'sid', ''))
     sender_id = sid_users.get(sid) or data.get('sender_id')
 
-    call = CallSession.query.filter_by(call_id=call_id).first()
-    if call and candidate:
-        target_id = call.receiver_id if (sender_id and int(sender_id) == call.caller_id) else call.caller_id
-        emit('call:ice_candidate', {'call_id': call_id, 'candidate': candidate}, room=f'user_{target_id}')
+    call_data = active_calls.get(call_id)
+    caller_id = None
+    receiver_id = None
+    if call_data:
+        caller_id = call_data.get('caller_id')
+        receiver_id = call_data.get('receiver_id')
+    else:
+        call = CallSession.query.filter_by(call_id=call_id).first()
+        if call:
+            caller_id = call.caller_id
+            receiver_id = call.receiver_id
+
+    if caller_id and receiver_id:
+        try:
+            target_id = receiver_id if (sender_id and int(sender_id) == caller_id) else caller_id
+            emit('call:ice_candidate', {'call_id': call_id, 'candidate': candidate}, room=f'user_{target_id}')
+        except Exception:
+            pass
 
 
 @socketio.on('call:end')

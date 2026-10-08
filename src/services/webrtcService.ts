@@ -9,8 +9,11 @@ export const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun.services.mozilla.com' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    { urls: 'stun:openrelay.metered.ca:80' },
     {
       urls: [
         'turn:openrelay.metered.ca:80',
@@ -30,7 +33,7 @@ export const RTC_CONFIG: RTCConfiguration = {
         ]
       : []),
   ],
-  iceCandidatePoolSize: 10,
+  iceCandidatePoolSize: 0,
 }
 
 export class WebRTCService {
@@ -94,11 +97,16 @@ export class WebRTCService {
     onIceCandidate?: (candidate: RTCIceCandidate) => void
     onConnectionStateChange?: (state: RTCPeerConnectionState) => void
   }): RTCPeerConnection {
-    this.cleanupPeerConnection()
+    if (this.peerConnection) {
+      this.peerConnection.onicecandidate = null
+      this.peerConnection.ontrack = null
+      this.peerConnection.onconnectionstatechange = null
+      this.peerConnection.close()
+      this.peerConnection = null
+    }
 
     const pc = new RTCPeerConnection(RTC_CONFIG)
     this.peerConnection = pc
-    this.candidateQueue = []
 
     // Attach local audio tracks if stream is already acquired
     if (this.localStream) {
@@ -202,14 +210,18 @@ export class WebRTCService {
    * Add ICE candidate received from signaling server.
    * Queues candidate if remote description has not been set yet.
    */
-  public async addIceCandidate(candidate: RTCIceCandidateInit): Promise<void> {
+  public async addIceCandidate(candidate: RTCIceCandidateInit | null): Promise<void> {
+    if (!candidate || !candidate.candidate) {
+      return
+    }
+
     if (!this.peerConnection || !this.peerConnection.remoteDescription) {
       this.candidateQueue.push(candidate)
       return
     }
 
     try {
-      await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate))
+      await this.peerConnection.addIceCandidate(candidate)
     } catch (err) {
       console.warn('[WebRTC] Error adding ICE candidate:', err)
     }
@@ -217,11 +229,12 @@ export class WebRTCService {
 
   private async flushQueuedCandidates(): Promise<void> {
     if (!this.peerConnection || !this.peerConnection.remoteDescription) return
-    while (this.candidateQueue.length > 0) {
-      const cand = this.candidateQueue.shift()
-      if (cand) {
+    const queued = [...this.candidateQueue]
+    this.candidateQueue = []
+    for (const cand of queued) {
+      if (cand && cand.candidate) {
         try {
-          await this.peerConnection.addIceCandidate(new RTCIceCandidate(cand))
+          await this.peerConnection.addIceCandidate(cand)
         } catch (err) {
           console.warn('[WebRTC] Error flushing queued candidate:', err)
         }
@@ -254,6 +267,13 @@ export class WebRTCService {
       }
     }
     return false
+  }
+
+  /**
+   * Get current RTCPeerConnection state if active.
+   */
+  public getConnectionState(): RTCPeerConnectionState | null {
+    return this.peerConnection ? this.peerConnection.connectionState : null
   }
 
   /**
