@@ -353,8 +353,6 @@ def register():
     if not _validate_phone(phone):
         return {'success': False, 'message': 'Phone number is invalid'}, 400
 
-    resend_key = (os.environ.get('RESEND_API_KEY') or '').strip()
-    is_mail_configured = bool(resend_key or os.environ.get('MAIL_USERNAME'))
     user = User(
         name=name,
         email=email,
@@ -363,21 +361,19 @@ def register():
         organization=organization,
         phone=phone or None,
         address=address or None,
-        verified=False if is_mail_configured else True,
-        verification_token=str(uuid4()) if is_mail_configured else None,
-        verification_expiry=datetime.utcnow() + timedelta(days=1) if is_mail_configured else None,
+        verified=False,
+        verification_token=str(uuid4()),
+        verification_expiry=datetime.utcnow() + timedelta(days=1),
         status='approved',
         account_status='approved',
-        verification_status='PENDING' if is_mail_configured else 'VERIFIED',
+        verification_status='PENDING',
     )
     db.session.add(user)
     db.session.commit()
-    if is_mail_configured:
-        _send_verification_email(user)
+    _send_verification_email(user)
 
-    token = None if is_mail_configured else create_access_token(identity=str(user.id))
-    msg = 'Registration successful. Please verify your email to activate your account.' if is_mail_configured else 'Registration successful'
-    return _build_response(user, token=token, message=msg), 201
+    msg = 'Registration successful. Please verify your email to activate your account.'
+    return _build_response(user, token=None, message=msg), 201
 
 
 @auth_bp.route('/login', methods=['POST'])

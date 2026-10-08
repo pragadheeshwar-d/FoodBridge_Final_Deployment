@@ -4,8 +4,8 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://foodbridge-api-q1t4.onrender.com/api/:path*"
+      "source": "/api/((?!mail).*)",
+      "destination": "https://foodbridge-api-q1t4.onrender.com/api/$1"
     },
     {
       "source": "/uploads/:path*",

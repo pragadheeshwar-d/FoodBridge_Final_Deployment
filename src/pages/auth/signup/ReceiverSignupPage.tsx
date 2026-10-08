@@ -22,6 +22,7 @@ import {
 import { Logo } from '../../../components/layout/Logo'
 import { useAuth } from '../../../context/AuthContext'
 import { useToast } from '../../../context/ToastContext'
+import api from '../../../lib/api'
 
 const ORGANIZATION_TYPES = [
   'NGO',
@@ -150,7 +151,7 @@ export function ReceiverSignupPage() {
     setLoading(true)
     try {
       // Backend API registration call
-      await register({
+      const createdUser = await register({
         name: form.contactPerson.trim(),
         organization: form.orgName.trim(),
         email: form.email.trim().toLowerCase(),
@@ -162,8 +163,13 @@ export function ReceiverSignupPage() {
         organizationType: form.orgType,
       })
 
-      toast('Account created! A verification link has been sent to your email.', 'success')
-      setCurrentStep('email_sent')
+      if (createdUser && (createdUser.verified || localStorage.getItem('token'))) {
+        toast('Account created successfully! Welcome to FoodBridge.', 'success')
+        navigate('/receiver', { replace: true })
+      } else {
+        toast('Account created! A verification link has been sent to your email.', 'success')
+        setCurrentStep('email_sent')
+      }
     } catch (error: any) {
       const msg = error?.response?.data?.message || error?.message || 'Account registration failed. Please try again.'
       setErrorMessage(msg)
@@ -175,12 +181,17 @@ export function ReceiverSignupPage() {
 
   // Resend email handler
   const handleResendEmail = async () => {
+    if (!form.email.trim()) {
+      toast('Please enter your email address.', 'error')
+      return
+    }
     setResending(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1200))
+      await api.post('/auth/resend-verification', { email: form.email.trim().toLowerCase() })
       toast(`Verification email resent to ${form.email}`, 'success')
-    } catch {
-      toast('Failed to resend verification email. Please try again later.', 'error')
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || 'Failed to resend verification email. Please try again later.'
+      toast(msg, 'error')
     } finally {
       setResending(false)
     }
