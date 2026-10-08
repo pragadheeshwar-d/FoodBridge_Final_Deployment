@@ -7,7 +7,7 @@ import axios from 'axios'
 
 const DEFAULT_API_URL = import.meta.env?.DEV
   ? ''
-  : 'https://foodbridge-api-9tjt.onrender.com'
+  : 'https://foodbridge-api-q1t4.onrender.com'
 
 export const BASE_URL = ((import.meta.env?.VITE_API_URL as string) || DEFAULT_API_URL).replace(/\/+$/, '')
 
