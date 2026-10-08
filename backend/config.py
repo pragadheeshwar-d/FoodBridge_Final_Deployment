@@ -65,7 +65,7 @@ class Config:
     MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL', 'True') == 'True'
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
-    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@foodbridge.com')
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'FoodBridge <onboarding@resend.dev>')
     RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 
     FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5190')

@@ -178,7 +178,7 @@ def _verification_url(token: str) -> str:
 
 def _send_email_message(to_email: str, subject: str, text_body: str, html_body: str, app) -> bool:
     # 1. Primary: Resend API (HTTPS port 443)
-    resend_api_key = (os.environ.get('RESEND_API_KEY') or '').strip()
+    resend_api_key = (os.environ.get('RESEND_API_KEY') or current_app.config.get('RESEND_API_KEY') or '').strip()
     if resend_api_key:
         try:
             url = 'https://api.resend.com/emails'

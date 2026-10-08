@@ -24,8 +24,37 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Recipient and subject are required' });
   }
 
+  const resendApiKey = process.env.RESEND_API_KEY;
   const user = process.env.GMAIL_USER;
   const pass = process.env.GMAIL_APP_PASSWORD;
+
+  if (resendApiKey) {
+    try {
+      const resendRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: process.env.MAIL_DEFAULT_SENDER || 'FoodBridge <onboarding@resend.dev>',
+          to: [to],
+          subject,
+          text: text || '',
+          html: html || '',
+        }),
+      });
+
+      const resData = await resendRes.json();
+      if (resendRes.ok) {
+        console.log(`[MailRelay] Successfully sent email via Resend to ${to}, id: ${resData.id}`);
+        return res.status(200).json({ success: true, messageId: resData.id });
+      }
+      console.warn('[MailRelay] Resend API failed, trying SMTP fallback:', resData);
+    } catch (e) {
+      console.warn('[MailRelay] Resend error:', e);
+    }
+  }
 
   if (!user || !pass) {
     return res.status(500).json({ error: 'Mail relay credentials not configured in environment variables' });
