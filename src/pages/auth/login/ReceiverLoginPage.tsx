@@ -56,7 +56,10 @@ export function ReceiverLoginPage() {
     } catch (error: any) {
       const code = error?.response?.data?.code
       const msg = error?.response?.data?.message || error?.message || 'Login failed.'
-      if (code === 'EMAIL_NOT_VERIFIED') {
+      if (error?.code === 'ERR_NETWORK' || error?.message?.includes('Network Error')) {
+        setErrorMessage('Cannot reach backend server. If Render was idle, please wait a moment for it to wake up.')
+        toast('Network Error: Server waking up.', 'error')
+      } else if (code === 'EMAIL_NOT_VERIFIED' || code === 'EMAIL_UNVERIFIED') {
         setErrorMessage('Your email address is not verified yet. Please check your inbox.')
         toast('Please verify your email first.', 'warning')
       } else if (code === 'ROLE_MISMATCH') {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Mail, Lock } from 'lucide-react'
 import { AuthShell } from './AuthShell'
@@ -127,7 +127,10 @@ export function VerifyEmailPage() {
   const { toast } = useToast()
   const navigate = useNavigate()
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [verifiedUser, setVerifiedUser] = useState<any | null>(null)
   const token = searchParams.get('token') || ''
+
+  const hasVerified = useRef(false)
 
   const verify = async () => {
     if (!token) {
@@ -136,7 +139,18 @@ export function VerifyEmailPage() {
     }
     setStatus('loading')
     try {
-      await api.post('/auth/verify-email', { token })
+      const res = await api.post('/auth/verify-email', { token })
+      const u = res?.data?.user || res?.data?.data?.user
+      const authToken = res?.data?.token || res?.data?.data?.token
+
+      if (authToken) {
+        localStorage.setItem('token', authToken)
+      }
+      if (u) {
+        localStorage.setItem('user', JSON.stringify(u))
+        setVerifiedUser(u)
+      }
+
       setStatus('success')
       toast('Email verified successfully!', 'success')
     } catch (err: any) {
@@ -145,13 +159,23 @@ export function VerifyEmailPage() {
     }
   }
 
+  useEffect(() => {
+    if (token && !hasVerified.current) {
+      hasVerified.current = true
+      void verify()
+    }
+  }, [token])
+
+  const targetDashboard = verifiedUser?.role === 'receiver' ? '/receiver' : '/donor'
+  const targetLogin = verifiedUser?.role === 'receiver' ? '/auth/login/receiver' : '/auth/login/donor'
+
   return (
     <AuthShell
       title={status === 'success' ? 'Email Verified Successfully!' : 'Confirm Your Email'}
       subtitle={
         status === 'success'
-          ? 'Your email is verified. Your account is now awaiting admin approval.'
-          : 'Click the button below to verify your email address.'
+          ? 'Your email address has been verified. Welcome to FoodBridge!'
+          : 'Please wait while we verify your email address...'
       }
     >
       <div className="space-y-6">
@@ -161,35 +185,30 @@ export function VerifyEmailPage() {
               <div className="w-14 h-14 bg-emerald-500 text-white rounded-2xl flex items-center justify-center mb-3 shadow-glow">
                 <span className="text-2xl font-bold">✓</span>
               </div>
-              <h3 className="text-lg font-bold text-text dark:text-white">Email Verified Successfully</h3>
+              <h3 className="text-lg font-bold text-text dark:text-white">Email Confirmed!</h3>
               <p className="text-sm text-text-secondary mt-1 max-w-sm">
-                Thank you! Your email is confirmed.
+                {verifiedUser?.organization ? `${verifiedUser.organization} (${verifiedUser.name})` : verifiedUser?.name || 'Your account'} is now fully verified and activated.
               </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-3">
-              <span className="text-xl">⏳</span>
-              <div>
-                <p className="text-sm font-bold text-amber-800 dark:text-amber-300">
-                  Waiting for FoodBridge Admin Approval
-                </p>
-                <p className="text-xs text-amber-700/90 dark:text-amber-400/90 mt-1 leading-relaxed">
-                  Our admin team reviews every registered organization to ensure platform trust and safety. You will be notified once your account is approved.
-                </p>
-              </div>
             </div>
 
             <div className="space-y-2 pt-2">
               <Button
                 variant="primary"
                 className="w-full shadow-glow"
-                onClick={() => navigate('/auth/login')}
+                onClick={() => navigate(targetDashboard)}
               >
-                Sign In to View Approval Status
+                Continue to {verifiedUser?.role === 'receiver' ? 'Receiver' : 'Donor'} Dashboard
               </Button>
               <Button
                 variant="secondary"
                 className="w-full"
+                onClick={() => navigate(targetLogin)}
+              >
+                Go to Sign In
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full text-xs text-text-secondary"
                 onClick={() => navigate('/')}
               >
                 Back to Home
@@ -206,20 +225,29 @@ export function VerifyEmailPage() {
                 Please request a new verification link or sign in to resend.
               </p>
             </div>
-            <Button
-              variant="primary"
-              className="w-full"
-              onClick={() => navigate('/auth/login')}
-            >
-              Go to Sign In
-            </Button>
+            <div className="space-y-2">
+              <Button
+                variant="primary"
+                className="w-full"
+                onClick={() => navigate('/auth/login')}
+              >
+                Go to Sign In
+              </Button>
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={() => navigate('/')}
+              >
+                Back to Home
+              </Button>
+            </div>
           </div>
         )}
 
         {(status === 'idle' || status === 'loading') && (
-          <div className="space-y-4">
-            <p className="text-sm text-text-secondary text-center">
-              Please click below to verify your email and activate your account.
+          <div className="space-y-4 text-center py-4">
+            <p className="text-sm text-text-secondary">
+              Verifying your email token with FoodBridge servers...
             </p>
             <Button
               variant="primary"

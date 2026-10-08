@@ -22,11 +22,17 @@ class Config:
 
     _raw_db_url = (os.environ.get('DATABASE_URL') or '').strip().strip("'").strip('"')
     if not _raw_db_url:
-        database_url = 'mysql+pymysql://root:password@localhost/foodbridge'
+        database_url = 'mysql+pymysql://root:password@127.0.0.1/foodbridge'
     elif _raw_db_url.startswith('postgres://'):
         database_url = _raw_db_url.replace('postgres://', 'postgresql://', 1)
     else:
         database_url = _raw_db_url
+
+    # Normalize localhost to 127.0.0.1 to prevent Eventlet / Windows DNS resolution failures
+    if '@localhost/' in database_url:
+        database_url = database_url.replace('@localhost/', '@127.0.0.1/')
+    elif '@localhost:' in database_url:
+        database_url = database_url.replace('@localhost:', '@127.0.0.1:')
 
     SQLALCHEMY_DATABASE_URI = database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -60,8 +66,9 @@ class Config:
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@foodbridge.com')
+    RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 
-    FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+    FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5190')
     NOMINATIM_USER_AGENT = os.environ.get(
         'NOMINATIM_USER_AGENT',
         'FoodBridge/1.0 (+https://foodbridge.local; contact=support@foodbridge.local)',

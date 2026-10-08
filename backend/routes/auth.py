@@ -145,8 +145,24 @@ def _build_response(user: User, token: str | None = None, message: str = 'Operat
     return {'success': True, 'message': message, 'data': payload}
 
 
+def _get_frontend_base_url() -> str:
+    try:
+        origin = request.headers.get('Origin') if request else None
+        if origin and ('localhost' in origin or '127.0.0.1' in origin or 'vercel.app' in origin):
+            return origin.rstrip('/')
+        referer = request.headers.get('Referer') if request else None
+        if referer and ('localhost' in referer or '127.0.0.1' in referer or 'vercel.app' in referer):
+            from urllib.parse import urlparse
+            p = urlparse(referer)
+            return f"{p.scheme}://{p.netloc}"
+    except Exception:
+        pass
+    frontend = current_app.config.get('FRONTEND_URL') or os.environ.get('FRONTEND_URL') or 'http://localhost:5190'
+    return frontend.rstrip('/')
+
+
 def _verification_url(token: str) -> str:
-    frontend = current_app.config.get('FRONTEND_URL') or 'http://localhost:5173'
+    frontend = _get_frontend_base_url()
     return f'{frontend}/auth/verify-email?token={token}'
 
 
@@ -295,7 +311,7 @@ def _send_verification_email(user: User) -> None:
 
 
 def _reset_url(token: str) -> str:
-    frontend = current_app.config.get('FRONTEND_URL') or 'http://localhost:5173'
+    frontend = _get_frontend_base_url()
     return f'{frontend}/auth/reset-password?token={token}'
 
 
@@ -578,10 +594,14 @@ def verify_email():
     user.verification_token = None
     user.verification_expiry = None
     db.session.commit()
+    access_token = create_access_token(identity=str(user.id))
     return {
         'success': True,
-        'message': 'Email verified successfully! You can now log in to your account.',
-        'data': {'user': _user_payload(user)}
+        'message': 'Email verified successfully! You can now access your account.',
+        'data': {
+            'token': access_token,
+            'user': _user_payload(user),
+        }
     }, 200
 
 

@@ -141,8 +141,8 @@ export default function ReceiverDonationsPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  const [locationStatus, setLocationStatus] = useState<LocationStatus>('loading')
-  const [origin, setOrigin] = useState<{ lat: number; lng: number } | null>(null)
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>('ready')
+  const [origin, setOrigin] = useState<{ lat: number; lng: number } | null>({ lat: 13.0827, lng: 80.2707 })
   const [searchAddress, setSearchAddress] = useState('')
   const [searchText, setSearchText] = useState('')
   const [vegFilter, setVegFilter] = useState<VegFilter>('all')
@@ -250,6 +250,7 @@ export default function ReceiverDonationsPage() {
   const resolveBrowserLocation = async () => {
     if (!navigator.geolocation) {
       setLocationStatus('denied')
+      setOrigin({ lat: 13.0827, lng: 80.2707 })
       return
     }
 
@@ -264,8 +265,9 @@ export default function ReceiverDonationsPage() {
       },
       () => {
         setLocationStatus('denied')
+        setOrigin({ lat: 13.0827, lng: 80.2707 })
       },
-      { enableHighAccuracy: true, timeout: 12_000 },
+      { enableHighAccuracy: true, timeout: 6_000 },
     )
   }
 

@@ -5,6 +5,13 @@ from datetime import datetime
 from extensions import db
 
 
+def _to_iso(dt):
+    if not dt:
+        return None
+    val = dt.isoformat()
+    return val if (val.endswith('Z') or '+' in val or '-' in val[10:]) else f"{val}Z"
+
+
 class User(db.Model):
     __tablename__ = 'users'
 
@@ -432,8 +439,8 @@ class Conversation(db.Model):
             'pickup': pickup_data,
             'last_message': last_msg.to_dict() if last_msg else None,
             'unread_count': unread_count,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_at': _to_iso(self.created_at),
+            'updated_at': _to_iso(self.updated_at),
         }
 
 
@@ -470,9 +477,9 @@ class CallSession(db.Model):
             'receiver_name': (receiver.organization or receiver.name) if receiver else 'Unknown Receiver',
             'receiver_avatar': receiver.profile_image if receiver else None,
             'status': self.status,
-            'started_at': self.started_at.isoformat() if self.started_at else None,
-            'answered_at': self.answered_at.isoformat() if self.answered_at else None,
-            'ended_at': self.ended_at.isoformat() if self.ended_at else None,
+            'started_at': _to_iso(self.started_at),
+            'answered_at': _to_iso(self.answered_at),
+            'ended_at': _to_iso(self.ended_at),
             'duration': self.duration,
         }
 
@@ -553,7 +560,7 @@ class Message(db.Model):
             'need_id': self.need_id,
             'pickup_id': self.pickup_id,
             'context': context_data,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': _to_iso(self.created_at),
             'is_read': bool(self.is_read),
         }
 

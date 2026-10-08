@@ -55,7 +55,7 @@ Backend `.env`:
 ```env
 SECRET_KEY=
 JWT_SECRET_KEY=
-DATABASE_URL=mysql+pymysql://root:password@localhost/foodbridge
+DATABASE_URL=mysql+pymysql://root:password@127.0.0.1/foodbridge
 UPLOAD_FOLDER=uploads
 JWT_ACCESS_TOKEN_EXPIRES=1d
 FRONTEND_URL=http://localhost:5173

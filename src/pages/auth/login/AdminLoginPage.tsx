@@ -59,12 +59,26 @@ export function AdminLoginPage() {
       const destination = redirectParam || '/admin'
       navigate(destination, { replace: true })
     } catch (error: any) {
-      const msg = error?.response?.data?.message || error?.message || 'Admin authentication failed. Please verify credentials.'
-      setErrorMessage(msg)
-      toast(msg, 'error')
+      if (error?.code === 'ERR_NETWORK' || error?.message?.includes('Network Error')) {
+        setErrorMessage('Cannot reach backend server. Please verify your Render service is awake or check connection.')
+        toast('Network Error: Unable to reach backend.', 'error')
+      } else if (error?.response?.status === 401) {
+        setErrorMessage('Invalid admin email or password. Use: admin@foodbridge.org / Admin@123')
+        toast('Invalid credentials.', 'error')
+      } else {
+        const msg = error?.response?.data?.message || error?.message || 'Admin authentication failed. Please verify credentials.'
+        setErrorMessage(msg)
+        toast(msg, 'error')
+      }
     } finally {
       setLoading(false)
     }
+  }
+
+  const fillDefaultCredentials = () => {
+    setEmail('admin@foodbridge.org')
+    setPassword('Admin@123')
+    setErrorMessage(null)
   }
 
   return (
@@ -219,6 +233,23 @@ export function AdminLoginPage() {
                   <span>{errorMessage}</span>
                 </div>
               )}
+
+              {/* Quick credentials card */}
+              <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-700/60 flex items-center justify-between gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400">Default Admin: </span>
+                  <span className="text-emerald-400 font-mono font-medium">admin@foodbridge.org</span>
+                  <span className="text-slate-500"> / </span>
+                  <span className="text-slate-300 font-mono">Admin@123</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={fillDefaultCredentials}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 text-[11px] font-semibold transition-colors shrink-0"
+                >
+                  Auto-fill
+                </button>
+              </div>
 
               {/* Login Form */}
               <form onSubmit={handleSubmit} className="space-y-4 pt-1">

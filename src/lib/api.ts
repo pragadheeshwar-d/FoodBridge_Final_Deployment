@@ -7,14 +7,14 @@ import axios from 'axios'
 
 const DEFAULT_API_URL = import.meta.env?.DEV
   ? ''
-  : 'https://foodbridge-api-dldm.onrender.com'
+  : 'https://foodbridge-api-9tjt.onrender.com'
 
-export const BASE_URL = (import.meta.env?.VITE_API_URL as string) || DEFAULT_API_URL
+export const BASE_URL = ((import.meta.env?.VITE_API_URL as string) || DEFAULT_API_URL).replace(/\/+$/, '')
 
 const api = axios.create({
   baseURL: BASE_URL ? `${BASE_URL}/api` : '/api',
   headers: { 'Content-Type': 'application/json' },
-  timeout: 30_000,
+  timeout: 60_000,
 })
 
 api.interceptors.request.use((config) => {

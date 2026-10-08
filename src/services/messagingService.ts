@@ -6,6 +6,7 @@
 
 import api from '../lib/api'
 import { getSocket } from '../lib/socket'
+import { parseBackendDate } from '../lib/date'
 
 export interface ChatMessage {
   id: string
@@ -103,21 +104,27 @@ export function getInitials(name: string): string {
   return (parts[0][0] + parts[1][0]).toUpperCase()
 }
 
+export function parseDateSafe(dateInput?: string | Date | null): Date | null {
+  if (!dateInput) return null
+  if (dateInput instanceof Date) return isNaN(dateInput.getTime()) ? null : dateInput
+  return parseBackendDate(String(dateInput))
+}
+
 export function formatCurrentTime(): string {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 export function formatMessageTime(dateInput?: string | Date): string {
   if (!dateInput) return formatCurrentTime()
-  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
-  if (isNaN(d.getTime())) return formatCurrentTime()
+  const d = parseDateSafe(dateInput)
+  if (!d) return formatCurrentTime()
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 export function formatMessageDateGroup(dateInput?: string | Date): string {
   if (!dateInput) return 'Today'
-  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
-  if (isNaN(d.getTime())) return 'Today'
+  const d = parseDateSafe(dateInput)
+  if (!d) return 'Today'
 
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -131,8 +138,8 @@ export function formatMessageDateGroup(dateInput?: string | Date): string {
 
 export function formatConversationListTime(dateInput?: string | Date): string {
   if (!dateInput) return ''
-  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
-  if (isNaN(d.getTime())) return ''
+  const d = parseDateSafe(dateInput)
+  if (!d) return ''
 
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())

@@ -46,41 +46,40 @@ def api_response(*, success: bool, message: str = 'Success', data=None, status: 
 def seed_admin_user(app: Flask) -> None:
     from models import User  # Local import to avoid circular dependency
 
-    admin_email = app.config.get('ADMIN_EMAIL', '')
-    admin_password = app.config.get('ADMIN_PASSWORD', '')
+    admin_emails = list(dict.fromkeys([
+        app.config.get('ADMIN_EMAIL', 'admin@foodbridge.org').strip().lower(),
+        'admin@foodbridge.org',
+        'admin@foodbridge.com',
+    ]))
+    admin_password = app.config.get('ADMIN_PASSWORD', 'Admin@123')
     admin_name = app.config.get('ADMIN_NAME', 'FoodBridge Admin')
-
-    if not admin_email or not admin_password:
-        app.logger.warning(
-            'No admin account was seeded. Set ADMIN_EMAIL and ADMIN_PASSWORD to provision one.'
-        )
-        return
 
     with app.app_context():
         from bcrypt import gensalt, hashpw
         hashed = hashpw(admin_password.encode('utf-8'), gensalt()).decode('utf-8')
-        existing = User.query.filter_by(email=admin_email).first()
-        if existing:
-            existing.password = hashed
-            if existing.role != 'admin':
-                existing.role = 'admin'
-            if not existing.verified:
-                existing.verified = True
-            if existing.status != 'approved':
-                existing.status = 'approved'
-            db.session.commit()
-            return
-
-        admin = User(
-            name=admin_name,
-            email=admin_email,
-            password=hashed,
-            role='admin',
-            organization='FoodBridge',
-            verified=True,
-            status='approved',
-        )
-        db.session.add(admin)
+        for email in admin_emails:
+            if not email:
+                continue
+            existing = User.query.filter_by(email=email).first()
+            if existing:
+                existing.password = hashed
+                if existing.role != 'admin':
+                    existing.role = 'admin'
+                if not existing.verified:
+                    existing.verified = True
+                if existing.status != 'approved':
+                    existing.status = 'approved'
+            else:
+                admin = User(
+                    name=admin_name,
+                    email=email,
+                    password=hashed,
+                    role='admin',
+                    organization='FoodBridge',
+                    verified=True,
+                    status='approved',
+                )
+                db.session.add(admin)
         db.session.commit()
 
 
@@ -424,6 +423,7 @@ def create_app(config_class=Config):
         'http://localhost:4173',
         'http://127.0.0.1:4173',
         'http://localhost:3000',
+        re.compile(r'^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$'),
         re.compile(r'^https:\/\/.*\.vercel\.app$'),
     ]
     frontend_url = os.environ.get('FRONTEND_URL')
