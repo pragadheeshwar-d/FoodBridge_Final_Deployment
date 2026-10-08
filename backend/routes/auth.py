@@ -370,7 +370,7 @@ def register():
     )
     db.session.add(user)
     db.session.commit()
-    _send_verification_email(user)
+    _send_verification_email(user, sync=True)
 
     msg = 'Registration successful. Please verify your email to activate your account.'
     return _build_response(user, token=None, message=msg), 201
