@@ -373,6 +373,8 @@ def register():
     if not _validate_phone(phone):
         return {'success': False, 'message': 'Phone number is invalid'}, 400
 
+    resend_key = (os.environ.get('RESEND_API_KEY') or '').strip()
+    is_mail_configured = bool(resend_key or os.environ.get('MAIL_USERNAME'))
     user = User(
         name=name,
         email=email,
@@ -381,16 +383,17 @@ def register():
         organization=organization,
         phone=phone or None,
         address=address or None,
-        verified=False,
+        verified=True if not is_mail_configured else False,
         verification_token=str(uuid4()),
         verification_expiry=datetime.utcnow() + timedelta(days=1),
         status='approved',
         account_status='approved',
-        verification_status='PENDING',
+        verification_status='VERIFIED' if not is_mail_configured else 'PENDING',
     )
     db.session.add(user)
     db.session.commit()
-    _send_verification_email(user)
+    if is_mail_configured:
+        _send_verification_email(user)
 
     token = create_access_token(identity=str(user.id))
     return _build_response(user, token=token, message='Registration successful'), 201

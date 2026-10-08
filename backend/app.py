@@ -80,6 +80,57 @@ def seed_admin_user(app: Flask) -> None:
                     status='approved',
                 )
                 db.session.add(admin)
+        # Seed Demo Donor
+        donor_email = 'donor@foodbridge.org'
+        existing_donor = User.query.filter_by(email=donor_email).first()
+        donor_hashed = hashpw('Donor@123'.encode('utf-8'), gensalt()).decode('utf-8')
+        if existing_donor:
+            existing_donor.password = donor_hashed
+            existing_donor.verified = True
+            existing_donor.status = 'approved'
+            existing_donor.account_status = 'approved'
+            existing_donor.verification_status = 'VERIFIED'
+        else:
+            donor = User(
+                name='Annapoorna Kitchen',
+                email=donor_email,
+                password=donor_hashed,
+                role='donor',
+                organization='Annapoorna Caterers',
+                phone='9876543210',
+                address='T. Nagar, Chennai',
+                verified=True,
+                status='approved',
+                account_status='approved',
+                verification_status='VERIFIED',
+            )
+            db.session.add(donor)
+
+        # Seed Demo Receiver
+        receiver_email = 'receiver@foodbridge.org'
+        existing_receiver = User.query.filter_by(email=receiver_email).first()
+        receiver_hashed = hashpw('Receiver@123'.encode('utf-8'), gensalt()).decode('utf-8')
+        if existing_receiver:
+            existing_receiver.password = receiver_hashed
+            existing_receiver.verified = True
+            existing_receiver.status = 'approved'
+            existing_receiver.account_status = 'approved'
+            existing_receiver.verification_status = 'VERIFIED'
+        else:
+            receiver = User(
+                name='Aadhavan Trust',
+                email=receiver_email,
+                password=receiver_hashed,
+                role='receiver',
+                organization='Aadhavan Shelter',
+                phone='9876543211',
+                address='Adyar, Chennai',
+                verified=True,
+                status='approved',
+                account_status='approved',
+                verification_status='VERIFIED',
+            )
+            db.session.add(receiver)
         db.session.commit()
 
 
@@ -88,13 +139,14 @@ def auto_verify_all_users(app: Flask) -> None:
 
     with app.app_context():
         try:
-            unverified = User.query.filter((User.verified == False) | (User.status == 'pending')).all()
-            for u in unverified:
+            users = User.query.all()
+            for u in users:
                 u.verified = True
                 if u.status == 'pending':
                     u.status = 'approved'
-                if getattr(u, 'account_status', None) == 'pending':
+                if getattr(u, 'account_status', None) == 'pending' or not getattr(u, 'account_status', None):
                     u.account_status = 'approved'
+                u.verification_status = 'VERIFIED'
             db.session.commit()
         except Exception as e:
             app.logger.warning(f'Could not auto-verify existing users: {e}')
