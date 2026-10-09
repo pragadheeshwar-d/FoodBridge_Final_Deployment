@@ -352,6 +352,33 @@ class MessagingFlowTests(unittest.TestCase):
         lookup_data = self._get_data(lookup_resp)
         self.assertEqual(lookup_data['conversation']['id'], conv_id)
 
+    def test_direct_donor_receiver_chat_initiation(self):
+        """Test that a receiver can initiate chat with a donor directly (e.g. from partner profile modal)."""
+        # Lookup/create conversation directly with partner_id
+        lookup_resp = self.client.post(
+            '/api/chat/conversations/lookup',
+            headers=self._auth_header(self.receiver_token),
+            json={'partner_id': self.donor.id},
+        )
+        self.assertEqual(lookup_resp.status_code, 200)
+        lookup_data = self._get_data(lookup_resp)
+        self.assertTrue(lookup_data['success'])
+        conv_id = lookup_data['conversation']['id']
+
+        # Send direct message
+        send_resp = self.client.post(
+            '/api/chat/messages',
+            headers=self._auth_header(self.receiver_token),
+            json={
+                'conversation_id': conv_id,
+                'message': 'Hello, I would like to connect regarding future food donations!',
+            },
+        )
+        self.assertEqual(send_resp.status_code, 201)
+        send_data = self._get_data(send_resp)
+        self.assertEqual(send_data['message'], 'Hello, I would like to connect regarding future food donations!')
+        self.assertEqual(send_data['conversation_id'], conv_id)
+
 
 if __name__ == '__main__':
     unittest.main()

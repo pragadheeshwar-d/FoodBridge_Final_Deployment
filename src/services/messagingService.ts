@@ -329,11 +329,18 @@ export async function sendChatMessage(payload: {
   message: string
   donation_id?: string | number
   pickup_id?: string | number
+  need_id?: string | number
 }): Promise<ChatMessage | null> {
   const token = localStorage.getItem('token')
   if (!token) throw new Error('Not authenticated')
 
-  const res = await api.post('/chat/messages', payload)
+  // Clean payload: if conversation_id is temporary / non-numeric string, remove it
+  const cleanPayload = { ...payload }
+  if (cleanPayload.conversation_id && typeof cleanPayload.conversation_id === 'string' && !/^\d+$/.test(cleanPayload.conversation_id)) {
+    delete cleanPayload.conversation_id
+  }
+
+  const res = await api.post('/chat/messages', cleanPayload)
   const rawMsg = res.data?.data || res.data
   return normalizeChatMessage(rawMsg)
 }
@@ -344,6 +351,7 @@ export async function sendChatMessage(payload: {
 export async function markConversationRead(conversationId: string | number): Promise<void> {
   const token = localStorage.getItem('token')
   if (!token || !conversationId) return
+  if (typeof conversationId === 'string' && !/^\d+$/.test(conversationId)) return
 
   try {
     await api.post(`/chat/conversations/${conversationId}/read`)
@@ -353,12 +361,13 @@ export async function markConversationRead(conversationId: string | number): Pro
 }
 
 /**
- * Find or securely create a conversation for partner + donation.
+ * Find or securely create a conversation for partner + donation / need.
  */
 export async function lookupOrCreateConversation(
   partnerId: string | number,
   donationId?: string | number,
-  pickupId?: string | number
+  pickupId?: string | number,
+  needId?: string | number
 ): Promise<ChatConversation | null> {
   const token = localStorage.getItem('token')
   if (!token) return null
@@ -368,6 +377,7 @@ export async function lookupOrCreateConversation(
       partner_id: partnerId,
       donation_id: donationId,
       pickup_id: pickupId,
+      need_id: needId,
     })
     const raw = res.data?.data?.conversation || res.data?.conversation || res.data
     return raw ? normalizeConversation(raw) : null

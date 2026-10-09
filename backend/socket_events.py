@@ -139,17 +139,16 @@ def handle_send_message(data):
                 .order_by(PickupRequest.requested_at.desc())
                 .first()
             )
-            if latest_pickup:
-                conv = Conversation(
-                    donor_id=donor_id,
-                    receiver_id=recv_id,
-                    donation_id=latest_pickup.donation_id,
-                    request_id=latest_pickup.id,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow()
-                )
-                db.session.add(conv)
-                db.session.flush()
+            conv = Conversation(
+                donor_id=donor_id,
+                receiver_id=recv_id,
+                donation_id=latest_pickup.donation_id if latest_pickup else None,
+                request_id=latest_pickup.id if latest_pickup else None,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            db.session.add(conv)
+            db.session.flush()
 
     msg = Message(
         conversation_id=conv.id if conv else None,

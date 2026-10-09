@@ -202,6 +202,7 @@ def lookup_or_create_conversation():
     partner_id = data.get('partner_id') or data.get('partnerId')
     donation_id = data.get('donation_id') or data.get('donationId')
     pickup_id = data.get('pickup_id') or data.get('pickupId')
+    need_id = data.get('need_id') or data.get('needId')
 
     if not partner_id:
         return jsonify({'success': False, 'message': 'partner_id is required'}), 400
@@ -217,21 +218,27 @@ def lookup_or_create_conversation():
     donor_id = user.id if user.role == 'donor' else partner.id
     receiver_id = user.id if user.role == 'receiver' else partner.id
 
-    # Validate donation / pickup existence
+    # Validate donation / pickup / food need existence
     donation = None
     pickup = None
+    need = None
 
     if donation_id:
         donation = Donation.query.get(int(donation_id))
-        if not donation or donation.donor_id != donor_id:
-            return jsonify({'success': False, 'message': 'Donation does not belong to this donor'}), 403
+        if donation and donation.donor_id != donor_id:
+            donation = None
 
     if pickup_id:
         pickup = PickupRequest.query.get(int(pickup_id))
-        if not pickup or pickup.receiver_id != receiver_id or (donation and pickup.donation_id != donation.id):
-            return jsonify({'success': False, 'message': 'Pickup request not found or does not belong to this receiver'}), 403
-        if not donation:
+        if pickup and pickup.receiver_id != receiver_id:
+            pickup = None
+        if pickup and not donation:
             donation = pickup.donation
+
+    if need_id:
+        need = FoodNeed.query.get(int(need_id))
+        if need and need.receiver_id != receiver_id:
+            need = None
 
     # If neither donation nor pickup was passed, look for existing pickup between these two users
     if not donation and not pickup:
@@ -245,8 +252,9 @@ def lookup_or_create_conversation():
         if pickup:
             donation = pickup.donation
 
-    if not donation and not pickup:
-        return jsonify({'success': False, 'message': 'A valid donation or request transaction is required to establish communication.'}), 403
+    # If no need passed, check if receiver has any open food need
+    if not need:
+        need = FoodNeed.query.filter_by(receiver_id=receiver_id).order_by(FoodNeed.created_at.desc()).first()
 
     # Strictly ONE conversation per pair: check for existing conversation
     conv = Conversation.query.filter_by(
@@ -255,11 +263,13 @@ def lookup_or_create_conversation():
     ).first()
 
     if conv:
-        # Update existing conversation context with latest donation / pickup
+        # Update existing conversation context with latest donation / pickup / need
         if donation:
             conv.donation_id = donation.id
         if pickup:
             conv.request_id = pickup.id
+        if need and not conv.need_id:
+            conv.need_id = need.id
         conv.updated_at = datetime.utcnow()
         db.session.commit()
     else:
@@ -268,6 +278,7 @@ def lookup_or_create_conversation():
             receiver_id=receiver_id,
             donation_id=donation.id if donation else None,
             request_id=pickup.id if pickup else None,
+            need_id=need.id if need else None,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )
@@ -323,19 +334,25 @@ def send_message():
 
         donation_id = data.get('donation_id') or data.get('donationId')
         pickup_id = data.get('pickup_id') or data.get('pickupId')
+        need_id = data.get('need_id') or data.get('needId')
 
         donation = None
         pickup = None
+        need = None
         if donation_id:
             donation = Donation.query.get(int(donation_id))
-            if not donation or donation.donor_id != donor_id:
-                return jsonify({'success': False, 'message': 'Invalid donation.'}), 403
+            if donation and donation.donor_id != donor_id:
+                donation = None
         if pickup_id:
             pickup = PickupRequest.query.get(int(pickup_id))
-            if not pickup or pickup.receiver_id != partner_receiver_id:
-                return jsonify({'success': False, 'message': 'Invalid pickup request.'}), 403
-            if not donation:
+            if pickup and pickup.receiver_id != partner_receiver_id:
+                pickup = None
+            if pickup and not donation:
                 donation = pickup.donation
+        if need_id:
+            need = FoodNeed.query.get(int(need_id))
+            if need and need.receiver_id != partner_receiver_id:
+                need = None
 
         if not donation and not pickup:
             pickup = (
@@ -348,8 +365,8 @@ def send_message():
             if pickup:
                 donation = pickup.donation
 
-        if not donation and not pickup:
-            return jsonify({'success': False, 'message': 'A valid donation or request transaction is required.'}), 403
+        if not need:
+            need = FoodNeed.query.filter_by(receiver_id=partner_receiver_id).order_by(FoodNeed.created_at.desc()).first()
 
         conv = Conversation.query.filter_by(
             donor_id=donor_id,
@@ -362,6 +379,7 @@ def send_message():
                 receiver_id=partner_receiver_id,
                 donation_id=donation.id if donation else None,
                 request_id=pickup.id if pickup else None,
+                need_id=need.id if need else None,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow(),
             )
@@ -372,6 +390,8 @@ def send_message():
                 conv.donation_id = donation.id
             if pickup:
                 conv.request_id = pickup.id
+            if need and not conv.need_id:
+                conv.need_id = need.id
             conv.updated_at = datetime.utcnow()
             db.session.flush()
 

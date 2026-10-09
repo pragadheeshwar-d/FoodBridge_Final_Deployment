@@ -30,6 +30,8 @@ import {
   emitTypingStatus,
   formatMessageDateGroup,
   normalizeChatMessage,
+  getInitials,
+  getAvatarBg,
 } from '../../services/messagingService'
 import { getSocket } from '../../lib/socket'
 
@@ -98,28 +100,84 @@ export function ChatInterface({ role: propRole }: ChatInterfaceProps) {
           uniqueItems.push(item)
         }
       }
-      setConversations(uniqueItems)
 
       // Handle query parameters if present (e.g. ?partnerId=... or ?conversationId=...)
-      const params = new URLSearchParams(window.location.search)
+      const searchStr = location.search || window.location.search || ''
+      const params = new URLSearchParams(searchStr)
       const urlConvId = params.get('conversationId')
       const partnerId = params.get('partnerId')
+      const partnerName = params.get('partnerName')
+      const partnerOrg = params.get('partnerOrg')
       const donationId = params.get('donationId')
       const pickupId = params.get('pickupId')
+      const needId = params.get('needId')
+
+      let matchedConv: ChatConversation | undefined
+
+      if (urlConvId) {
+        matchedConv = uniqueItems.find((c) => c.id === urlConvId)
+      }
+      if (!matchedConv && partnerId) {
+        matchedConv = uniqueItems.find(
+          (c) =>
+            c.participantId === partnerId ||
+            (donationId && c.donationId === donationId) ||
+            (pickupId && c.pickupId === pickupId)
+        )
+      }
+
+      // If partnerId specified in URL and not in uniqueItems, immediately lookup or create conversation!
+      if (!matchedConv && partnerId) {
+        try {
+          const created = await lookupOrCreateConversation(
+            partnerId,
+            donationId || undefined,
+            pickupId || undefined,
+            needId || undefined
+          )
+
+          if (created) {
+            uniqueItems.unshift(created)
+            matchedConv = created
+          } else {
+            const stubName = partnerOrg || partnerName || 'Partner'
+            const stubConv: ChatConversation = {
+              id: `conv-temp-${partnerId}`,
+              donorId: currentRole === 'donor' ? currentUserId : partnerId,
+              receiverId: currentRole === 'receiver' ? currentUserId : partnerId,
+              participantId: partnerId,
+              name: stubName,
+              contactName: partnerName || stubName,
+              participantType: currentRole === 'receiver' ? 'DONOR' : 'NGO',
+              orgType: partnerOrg || (currentRole === 'receiver' ? 'Donor Partner' : 'Community NGO'),
+              subtitle: `${currentRole === 'receiver' ? 'Donor' : 'NGO'} • Food Coordination`,
+              lastMessage: 'No messages yet',
+              time: '',
+              unreadCount: 0,
+              avatarInitials: getInitials(stubName),
+              avatarBg: getAvatarBg(stubName + partnerId),
+              online: true,
+              verified: true,
+              donationId: donationId || undefined,
+              pickupId: pickupId || undefined,
+              messages: [],
+            }
+            uniqueItems.unshift(stubConv)
+            matchedConv = stubConv
+          }
+        } catch (e) {
+          console.warn('lookupOrCreateConversation error:', e)
+        }
+      }
+
+      setConversations(uniqueItems)
+
+      if (matchedConv) {
+        setShowMobileChat(true)
+      }
 
       setSelectedId((prevSelected) => {
-        if (urlConvId && uniqueItems.some((c) => c.id === urlConvId)) {
-          return urlConvId
-        }
-        if (partnerId) {
-          const match = uniqueItems.find(
-            (c) =>
-              c.participantId === partnerId ||
-              (donationId && c.donationId === donationId) ||
-              (pickupId && c.pickupId === pickupId)
-          )
-          if (match) return match.id
-        }
+        if (matchedConv) return matchedConv.id
         if (prevSelected && uniqueItems.some((c) => c.id === prevSelected)) {
           return prevSelected
         }
@@ -130,34 +188,11 @@ export function ChatInterface({ role: propRole }: ChatInterfaceProps) {
     } finally {
       setIsLoadingConvs(false)
     }
-  }, [currentUserId])
+  }, [currentUserId, currentRole])
 
   useEffect(() => {
     void loadConversations()
-  }, [loadConversations])
-
-  // If partnerId is in URL but not in existing conversations, lookup or create it
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const partnerId = params.get('partnerId')
-    const donationId = params.get('donationId')
-    const pickupId = params.get('pickupId')
-
-    if (partnerId && !isLoadingConvs) {
-      const exists = conversations.some((c) => c.participantId === partnerId)
-      if (!exists && currentUserId) {
-        void lookupOrCreateConversation(partnerId, donationId || undefined, pickupId || undefined).then((created) => {
-          if (created) {
-            setConversations((prev) => {
-              const filtered = prev.filter((c) => c.id !== created.id && c.participantId !== created.participantId)
-              return [created, ...filtered]
-            })
-            setSelectedId(created.id)
-          }
-        })
-      }
-    }
-  }, [isLoadingConvs, conversations, currentUserId])
+  }, [loadConversations, location.search])
 
   // 2. Fetch messages whenever selected conversation changes
   useEffect(() => {
@@ -461,6 +496,16 @@ export function ChatInterface({ role: propRole }: ChatInterfaceProps) {
           setMessages((prev) =>
             prev.map((m) => (m.id === tempId ? savedMsg : m))
           )
+          if (savedMsg.conversationId && activeConversation.id !== savedMsg.conversationId) {
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.id === activeConversation.id
+                  ? { ...c, id: savedMsg.conversationId }
+                  : c
+              )
+            )
+            setSelectedId(savedMsg.conversationId)
+          }
         }
       } catch (err: any) {
         console.error('Failed to send message:', err)
